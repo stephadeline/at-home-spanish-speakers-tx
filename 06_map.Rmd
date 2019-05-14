@@ -1,0 +1,106 @@
+---
+title: "Mapping poverty in Texas"
+output:
+  html_document:
+    df_print: paged
+---
+
+```{r}
+library(tidyverse)
+library(tidycensus)
+library(janitor)
+library(tigris)
+library(waffle)
+```
+
+```{r}
+poverty <-read_csv("data-raw/ACSST5Y2017.S1701_data_with_overlays_2019-04-27T004427.csv", skip = 1) %>% clean_names()
+
+poverty
+```
+
+```{r}
+
+names(poverty) <- gsub("population_for_whom_poverty_status_is_determined", "", names(poverty))
+
+poverty_map <- poverty %>% 
+  select(id, geographic_area_name, estimate_percent_below_poverty_level_) %>% 
+  rename(pct_below = estimate_percent_below_poverty_level_)
+
+poverty_map %>% 
+  arrange(desc(pct_below))
+
+```
+
+Now let's map it
+
+```{r}
+options(tigris_use_cache = TRUE)
+options(tigris_class = "sf")
+
+tx_map <- counties("TX", cb=T)
+
+tx_map
+```
+
+```{r}
+poverty_map <- left_join(tx_map, poverty_map, by=c("AFFGEOID"="id"))
+poverty_map %>% saveRDS("data-out/poverty_map.rds")
+
+
+```
+
+```{r}
+poverty_map_gg <- ggplot(poverty_map) + 
+  geom_sf(aes(fill=pct_below), color="white") +
+  theme_void() +
+  theme(panel.grid.major = element_line(colour = 'transparent')) +
+  scale_fill_distiller(palette="Oranges", direction=1, name="% of total population") +
+  labs(title="Mapping Poverty in Texas", subtitle ="Which counties have a larger share of people below the poverty level?", caption="Source: Census Bureau/ACS5 2017")
+```
+
+Border communities have higher percentage of poverty.
+
+Going to map languages also
+
+```{r}
+language_tx <- read_csv("data-raw/ACSST5Y2017.S1601_data_with_overlays_2019-04-27T011257.csv", skip =1)
+```
+
+I downloaded the data from data.census.gov, but it's really big and hard to understand with the really long column names and I only need to look at this one column. Data is from ACS 5-year. This column shows the percent of Spanish speakers in a county.
+
+```{r}
+
+spanish <- language_tx %>% 
+  select("id", "Geographic Area Name", "Estimate!!Percent!!Population 5 years and over!!SPEAK A LANGUAGE OTHER THAN ENGLISH!!Spanish") %>% clean_names() %>% 
+  rename(spanish_pct = estimate_percent_population_5_years_and_over_speak_a_language_other_than_english_spanish)
+
+```
+
+
+Now let's map! First, I have to join them
+
+```{r}
+spanish_map <- left_join(tx_map, spanish, by=c("AFFGEOID"="id"))
+
+spanish_map %>% saveRDS("data-out/spanish_map.rds")
+
+
+spanish_map_gg <- ggplot(spanish_map) + 
+  geom_sf(aes(fill=spanish_pct), color="white") +
+  theme_void() +
+  theme(panel.grid.major = element_line(colour = 'transparent')) +
+  scale_fill_distiller(palette="Blues", direction=1, name="% of total population") +
+  labs(title="Mapping Spanish speakers in Texas", subtitle = "Which counties have a larger percentage of Spanish speakers?", caption="Source: Census Bureau/ACS5 2017")
+
+iron(poverty_map_gg, spanish_map_gg)
+
+```
+
+Both seem to have a higher percentage along the southern border
+
+Sources update:
+Ask Norma Ortiz (ESL teacher in El Paso, teaches Spanish students) about her experience teaching Spanish speakers. Why do you think Spanish speakers acquire English language slower?
+Why do you want to teach ESL?
+How do you think your experience teaching ESL differs vs if you were to teach in another city like Austin/Dallas/Houston or non-border communities?
+How does a Spanish speaker's English proficiency relate to their level of education?

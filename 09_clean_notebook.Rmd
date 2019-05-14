@@ -1,0 +1,439 @@
+---
+title: "A Look at the at-home Spanish-speaking Population in Texas"
+output:
+  html_document:
+    df_print: paged
+    knit: (function(inputFile, encoding) { rmarkdown::render(inputFile, encoding = encoding, output_dir = "docs") })
+
+---
+
+```{r}
+library(tidyverse)
+library(ggplot2)
+library(waffle)
+library(ggpubr)
+library(ggthemes)
+
+```
+
+#Introduction
+
+I am analyzing data on the at-home non-English speaking population in Texas. My focus is mostly on the Spanish-speaking population, because it is the largest language-speaking group in Texas. I am comparing the at-home Spanish-speaking population with the population speaking other languages at home. I am comparing the groups in terms of poverty, education levels and English Proficiency. All of my data are from the Census Bureau's American Community Survey 1-year and 5-year estimates.
+
+I am comparing at-home Spanish speakers with 3 other language groups: Asian & Pacific Island languages, other Indo-European languages and other languages. The Census Bureau uses this classification system for grouping languages. For a list of languages which these groups cover, visit the Census Bureau's website (https://www.census.gov/topics/population/language-use/about.html)
+
+#Poverty Levels
+
+Importing data
+
+I have imported and cleaned this dataset in another notebook (01_import.Rmd) and will import the exported .rds file. The source of this dataset is data.census.gov. Here is a link to the data: https://data.census.gov/cedsci/table?q=poverty%20language&table=C16009&tid=ACSDT1Y2017.C16009&t=Poverty%3APoverty&hidePreview=true&g=0400000US48
+These are based on American Community Survey 1-year estimates.
+
+For reference, in 2017, the Census Bureau uses $24,858 as the poverty threshold for a four-person household with 2 children under 18 years old. Read more about poverty thresholds here: https://www.census.gov/topics/income-poverty/poverty/guidance/poverty-measures.html
+
+```{r}
+tx_poverty_language <- read_rds("data-out/above_below-1.rds")
+
+tx_poverty_language
+```
+
+The two main questions I had for this data are:
+
+* What is the percentage of people above and below poverty for each language group? (visualize this.. pie chart? waffle chart?) probably only for 2017
+* Is there a larger share of people below poverty within a certain language group?
+
+
+In order to answer these questions, I have to create two new columns for the percentage of people below and at/above poverty level for each language groups.
+
+```{r}
+tx_poverty_language <- tx_poverty_language %>% 
+  mutate(
+    pct_below = estimate_below/(estimate_below+estimate_above)*100, #for percentage of people below poverty
+    pct_above = estimate_above/(estimate_below+estimate_above)*100 #for percentage of people at or above poverty
+  )
+```
+
+The first thing I wanted to know was what are the percentages of people above/below poverty for each language.
+
+I tried to visualize the share of the population that is below or above poverty for each language groups. I'm using waffle charts for this, with the waffle package. I'm doing this for the year 2017 only, because it is the most recent.
+
+First, I need to select the columns that I need, which are year, languages, and the two percentage column (below and at/above poverty level.) Also, before I did this, I made sure the margin of error for all values for the year 2017 are not above 10%.
+
+###Percentage of population below and at/above poverty level based on languages spoken at home
+```{r}
+poverty_2017_waffle <- tx_poverty_language %>% 
+  select (year, languages, pct_below, pct_above)
+
+poverty_2017_waffle <- poverty_2017_waffle %>% 
+  filter(year == 2017) #filter for 2017, because I only want to create waffle charts for 2017
+
+poverty_2017_waffle <- poverty_2017_waffle %>% 
+  rename("Below Poverty Level" = "pct_below",
+         "At or Above Poverty Level" = "pct_above") #renaming so the legend is clearer
+
+poverty_2017_waffle
+```
+
+Then, I need to save each language to a separate dataset.
+
+```{r}
+
+english_17 <- poverty_2017_waffle %>% 
+  mutate(year = NULL) %>% 
+  filter(languages == "only_english") %>% 
+  select("At or Above Poverty Level", "Below Poverty Level")
+
+spanish_17 <- poverty_2017_waffle %>% 
+  mutate(year = NULL) %>% 
+  filter(languages == "spanish") %>% 
+  select("At or Above Poverty Level", "Below Poverty Level")
+
+
+european_17 <- poverty_2017_waffle %>% 
+  mutate(year = NULL) %>% 
+  filter(languages == "other_indo_european_languages") %>% 
+  select("At or Above Poverty Level", "Below Poverty Level")
+
+
+asian_17 <- poverty_2017_waffle %>% 
+  mutate(year = NULL) %>% 
+  filter(languages == "asian_and_pacific_island_languages") %>% 
+  select("At or Above Poverty Level", "Below Poverty Level")
+
+
+other_17 <- poverty_2017_waffle %>% 
+  mutate(year = NULL) %>% 
+  filter(languages == "other_languages") %>% 
+  select("At or Above Poverty Level", "Below Poverty Level")
+
+```
+
+Finally, I can create the charts with waffle().
+
+```{r}
+english_2017 <- waffle(english_17, rows=3, title = "English", colors = c("light blue", "maroon", "white"))
+
+spanish_2017 <- waffle(spanish_17, rows=3, title = "Spanish", colors = c("light blue", "maroon", "white"))
+
+asian_2017 <- waffle(asian_17, rows=3, title = "Asian and Pacific Island languages",  colors = c("light blue", "maroon", "white"))
+
+european_2017 <- waffle(european_17, rows=3, title = "Other Indo-European languages", colors = c("light blue", "maroon", "white"))
+
+other_2017 <- waffle(other_17, rows=3, title = "Other", colors = c("light blue", "maroon", "white"))
+
+library(ggpubr)
+waffle_2017 <- ggarrange(english_2017, spanish_2017, asian_2017, european_2017, nrow = 4, common.legend = TRUE, legend ="right")
+
+waffle_2017 %>% annotate_figure(top = text_grob("Poverty Levels by Language Spoken at Home", color = "black", face = "bold", size = 20),
+               bottom = text_grob("Data source: ACS 2017 1-Year Estimates", color = "black",
+                                  hjust = 1, x = 1, face = "italic", size = 10))
+```
+
+Based on this chart, the population that speak Spanish at home have a higher share of people living below poverty compared to other groups. The difference isn't very big, but it's still there.
+
+##Mapping
+
+I also wanted to see if there is a relationship between poverty and the group that speaks Spanish at home geographically. Is there a higher percentage of people living below poverty in areas where there are more Spanish speakers?
+
+The data for both Spanish speakers per county was downloaded from data.census.gov. The data for poverty is similar to the one I analyzed earlier, except this is from a five-year estimate and it has all counties in Texas. It was also downloaded from data.census.gov.
+
+Link to data for poverty in Texas: https://data.census.gov/cedsci/table?q=poverty&table=S1701&tid=ACSST5Y2017.S1701&t=Poverty&hidePreview=true&g=0400000US48,48.050000
+Link to data for Spanish-speakers in Texas: https://data.census.gov/cedsci/table?q=Language%20Spoken%20at%20Home&table=S1601&tid=ACSST5Y2017.S1601&t=&hidePreview=true&n=&d=&y=&g=0400000US48.050000
+
+First, I imported the data. Again, I've cleaned both of these in a separate notebook (06_map.Rmd). In both of these, I've also joined the data with the geometry shape data from the tigris package.
+
+```{r}
+poverty_map <- readRDS("data-out/poverty_map.rds")
+spanish_map <- readRDS("data-out/spanish_map.rds")
+```
+
+Now, I can map these.
+
+```{r}
+poverty_map_gg <- ggplot(poverty_map) + 
+  geom_sf(aes(fill=pct_below), color="white") +
+  theme_void() +
+  theme(panel.grid.major = element_line(colour = 'transparent')) +
+  scale_fill_distiller(palette="Oranges", direction=1, name="% of total population") +
+  labs(title="Mapping Poverty in Texas", subtitle ="Which counties have a larger share of people below the poverty level?", caption="Source: Census Bureau/ACS5 2017")
+
+spanish_map_gg <- ggplot(spanish_map) + 
+  geom_sf(aes(fill=spanish_pct), color="white") +
+  theme_void() +
+  theme(panel.grid.major = element_line(colour = 'transparent')) +
+  scale_fill_distiller(palette="Blues", direction=1, name="% of total population") +
+  labs(title="Mapping Spanish Speakers in Texas", subtitle = "Which counties have a larger percentage of Spanish speakers?", caption="Source: Census Bureau/ACS5 2017")
+
+ggarrange(poverty_map_gg, spanish_map_gg, nrow = 2)
+```
+
+From these two maps I found that both poverty and Spanish speakers have higher percentages in border communities. Maybe being a Spanish speaker doesn't necessarily cause people to earn a lower income, but there has to be a relationship between the two.
+
+Some more questions I have after these findings:
+ * Are Spanish speakers "more likely to be in poverty" or are people below poverty level more likely to be Spanish speakers? Which is causing which? Or is there another factor that is causing the relationship?
+ 
+ To answer this question, I've looked at one more factor: educational attainment. I've also interviewed some people to understand this issue.
+
+#Educational Attainment
+
+Next, I want to compare the different language groups based on their educational attainment. The data I'm looking at breaks down groups speaking different languages at home based on their educational attainment and whether/not they're in the labor force. For the purpose of this analysis, I'll only look at educational attainment and not labor for participation.
+
+I got this data from the census API. I imported and cleaned the data on a separate notebook (04_import_language_education.Rmd)
+
+```{r}
+language_by_education <- readRDS("data-out/language_by_education.rds")
+```
+
+To compare the language groups, I'm creating waffle charts again to compare between the language groups. This means I have to first save the data into different language groups before charting.
+
+###Educational attainment of at-home Spanish Speakers
+
+```{r}
+spanish <- language_by_education %>% 
+  filter(language == "Speak Spanish") %>% 
+  select(language, education, employment, estimate, moe) #creating a table just for spanish
+
+spanish_by_education <- spanish %>% 
+  group_by(education) %>% 
+  summarise(sum=sum(estimate)) #grouping by just eductaion because I'm not looking at labor force participation
+
+
+spanish_by_education <- spanish_by_education %>% 
+  mutate(
+    pct = sum / sum(sum) * 100
+  )
+
+spanish_pct <- spanish_by_education %>% 
+  mutate(sum = NULL) %>% 
+  spread(education, pct)
+```
+
+###Educational attainment of at-home English-only Speakers
+
+```{r}
+english <- language_by_education %>% 
+  filter(language == "Speak only English")
+
+english_by_education <- english %>% 
+  group_by(education) %>% 
+  summarise(sum=sum(estimate))
+
+english_by_education <- english_by_education %>% 
+  mutate(
+    pct = sum / sum(sum) * 100
+  )
+
+english_pct <- english_by_education %>% 
+  mutate(sum = NULL) %>% 
+  spread(education, pct) %>% 
+  select("Bachelor's degree or higher", "Some college or associate's degree", "High school graduate (includes equivalency)", "Less than high school graduate")
+
+english_pct
+```
+
+###Educational attainment of at-home Asian and Pacific Island languages Speakers
+
+```{r}
+asian <- language_by_education %>% 
+  filter(language == "Speak Asian and Pacific Island languages")
+
+asian_by_education <- asian %>% 
+  group_by(education) %>% 
+  summarise(sum=sum(estimate))
+
+asian_by_education <- asian_by_education %>% 
+  mutate(
+    pct = sum / sum(sum) * 100
+  )
+
+asian_pct <- asian_by_education %>% 
+  mutate(sum = NULL) %>% 
+  spread(education, pct) %>% 
+  select("Bachelor's degree or higher", "Some college or associate's degree", "High school graduate (includes equivalency)", "Less than high school graduate")
+
+asian_pct
+```
+
+###Educational attainment of at-home other Indo-european languages Speakers
+
+```{r}
+
+indoeuropean <- language_by_education %>% 
+  filter(language == "Speak other Indo-European languages")
+
+indoeuropean_by_education <- indoeuropean %>% 
+  group_by(education) %>% 
+  summarise(sum=sum(estimate))
+
+indoeuropean_by_education <- indoeuropean_by_education %>% 
+  mutate(
+    pct = sum / sum(sum) * 100
+  )
+
+indoeuropean_pct <- indoeuropean_by_education %>% 
+  mutate(sum = NULL) %>% 
+  spread(education, pct) %>% 
+  select("Bachelor's degree or higher", "Some college or associate's degree", "High school graduate (includes equivalency)", "Less than high school graduate")
+```
+
+###Educational attainment of at-home other languages Speakers
+
+```{r}
+other <- language_by_education %>% 
+  filter(language == "Speak other languages")
+
+other_by_education <- other %>% 
+  group_by(education) %>% 
+  summarise(sum=sum(estimate))
+
+other_by_education <- other_by_education %>% 
+  mutate(
+    pct = sum / sum(sum) * 100
+  )
+
+other_pct <- other_by_education %>% 
+  mutate(sum = NULL) %>% 
+  spread(education, pct) %>% 
+  select("Bachelor's degree or higher", "Some college or associate's degree", "High school graduate (includes equivalency)", "Less than high school graduate")
+```
+
+Now, I will be creating separate charts and combining them with ggarrange.
+
+```{r}
+
+english_w <- waffle(english_pct, rows=3, colors = c("#ee4035", "#ffcc5c", "#7bc043", "#0392cf"), title = "English Only") + theme(legend.position = "none")
+
+spanish_w <- waffle(spanish_pct, rows=3, colors = c("#ee4035", "#ffcc5c", "#7bc043", "#0392cf"), title ="Spanish") + theme(legend.position = "none")
+
+
+indoeuropean_w <- waffle(indoeuropean_pct, rows=3, colors = c("#ee4035", "#ffcc5c", "#7bc043", "#0392cf"), title = "Other Indo-European languages") + theme(legend.position = "none")
+
+asian_w <- waffle(asian_pct, rows=3, colors = c("#ee4035", "#ffcc5c", "#7bc043", "#0392cf"), title = "Asian & Pacific Island languages") + theme(legend.position = "none")
+
+combined_chart <- ggarrange(english_w, asian_w, indoeuropean_w, spanish_w, nrow = 4, common.legend = TRUE, legend ="right")
+```
+
+Adding titles to explain the chart
+
+```{r}
+annotate_figure(combined_chart,
+               top = text_grob("Educational Attainment by Language Spoken at Home", color = "black", face = "bold", size = 20),
+               bottom = text_grob("Data source: ACS 2017 5-Year Estimates", color = "black",
+                                  hjust = 1, x = 1, face = "italic", size = 10))
+```
+
+Here you can see again that there's a gap between education levels of other language speakers compared with Spanish speakers.
+
+I've created a table also to look at the percentages.
+
+###Educational Attainment by Languages Spoken at Home in Texas
+
+```{r}
+education_language_table <- bind_rows(
+  "Speaks English Only" = english_pct, 
+  "Speaks Asian and Pacific Island Languages" = asian_pct, 
+  "Speaks Indo-european Languages" = indoeuropean_pct, 
+  "Speaks Spanish" = spanish_pct, 
+  "Speaks other languages" = other_pct,
+  .id = "Language spoken at home")
+
+education_language_table
+```
+
+A really small percentage of Spanish speakers have a Bachelor's degree or higher, but a majority of those who speak Asian and Pacific Island languages hold a bachelor's degree or higher. On the other hand, 39% of people who speak Spanish at home have less than a high school degree vs. only 14% of Asian & Pacific Island language speakers. I've interviewed ESL teachers from El Paso who have had experiences teaching Spanish speaking students as well as Asian language-speaking students, and they shared me their thoughts on why this gap exists.
+
+#English Proficiency
+
+Lastly, I want to compare the percentage of at-home Spanish speakers vs. other languages in terms of what percentage of them are proficient in English.
+
+I wanted to see if there is the same gap that we saw with education and poverty.
+
+```{r}
+language_proficiency <- readRDS("data-out/02_language_proficiency.rds")
+
+language_proficiency
+```
+
+This data is from: https://data.census.gov/cedsci/table?q=languages%20spoken%20at%20home&table=S1601&tid=ACSST5Y2017.S1601&t=Language%20Spoken%20at%20Home&hidePreview=true&g=0400000US48. It shows how many people can speak English "very well" vs. "less than very well", broken down to what language group they spoke at home. 
+
+I've already cleaned this dataset and created new columns for percentage of persons speaking English very well vs. less than very well.
+
+I want to visualize this the same way, with using waffle charts. First, I had to create separate dataframes for each language group, like I've already done before.
+
+I've also already made sure that the margin of errors for all are less than 10%.
+
+```{r}
+language_proficiency_pct <- language_proficiency %>% 
+  select(language, pct_very_well, pct_less_than_very_well)
+
+language_proficiency_pct <- language_proficiency_pct %>% 
+  rename ("Speaks English Very Well" = pct_very_well,
+          "Speaks English Less Than Very Well" = pct_less_than_very_well) #renaming so the legend is clear
+
+language_proficiency_pct
+```
+
+Next, I created waffle charts for the four language groups. This was done the same way that I made waffle charts for education and poverty.
+
+```{r}
+spanish_p <- language_proficiency_pct %>% 
+  filter(language == "spanish") %>% 
+  mutate(language = NULL)
+
+indoeuropean_p <- language_proficiency_pct %>% 
+  filter(language == "indoeuropean") %>% 
+  mutate(language = NULL)
+
+asian_p <- language_proficiency_pct %>% 
+  filter(language == "asian") %>% 
+  mutate(language = NULL)
+
+other_p <- language_proficiency_pct %>% 
+  filter(language == "other") %>% 
+  mutate(language = NULL)
+
+spanish_pw <- waffle(spanish_p, rows=3, colors = c("#3caea3", "#ff5733"), title = "Spanish") + theme(legend.position = "none")
+
+indoeuropean_pw <- waffle(indoeuropean_p, rows=3, colors = c("#3caea3", "#ff5733"), title = "Other Indo-European Languages") + theme(legend.position = "none")
+
+asian_pw <- waffle(asian_p, rows=3, colors = c("#3caea3", "#ff5733"), title = "Asian & Pacific Island Languages") + theme(legend.position = "none")
+
+other_pw <- waffle(other_p, rows=3, colors = c("#3caea3", "#ff5733"), title = "Other Languages") + theme(legend.position = "none")
+
+proficiency_chart <- ggarrange(spanish_pw, asian_pw, indoeuropean_pw, other_pw, nrow = 5, common.legend = TRUE, legend ="right")
+
+annotate_figure(proficiency_chart,
+               top = text_grob("English Proficiency by Languages Spoken at Home", color = "black", face = "bold", size = 20),
+               bottom = text_grob("Data source: ACS 2017 5-Year Estimates", color = "black",
+                                  hjust = 1, x = 1, face = "italic", size = 10))
+
+```
+
+Through the waffle charts you can see that the percentage for Spanish speakers who speak English very well (59%) is even slightly higher than for Asian and Pacific Island languages speakers (55%). This suggests that the gap we see for both poverty and education may not really be related to their level of English proficiency.
+
+However, at-home other Indo-European languages speakers seem to have the highest percentage of people who speak English very well (74%).
+
+For reference, here is the table again.
+
+###Languages Spoken at Home by English Proficiency
+
+```{r}
+language_proficiency_pct
+```
+
+
+#Conclusions
+
+A gap in education and poverty exists between the population speaking Spanish at home and the population speaking other languages at home (incl. English, other Indo-european languages and other languages). 
+
+My analysis is based on the American Community Survey. The survey estimated figures based on results from the year 2013 to 2017, so numbers may have changed since then.
+
+One third of at-home Asian and Pacific Island languages speakers hold a bachelor’s degree or higher compared to only 13% of at-home Spanish speakers. In comparison, 14 percent of at-home Asian and Pacific Island languages speakers have less than a high school degree compared to 40% of at-home Spanish speakers.
+
+Data from the survey also showed a quarter of the population speaking Spanish at home reported income below the poverty line as opposed to only 13 percent of the population speaking Asian and Pacific Island languages at home. 
+
+However, we see that 59 percent of Spanish speakers speak English "very well", whereas only 56 percent of at-home Asian and Pacific Island languages speakers do so. The population speaking other Indo-european languages and all other languages also have a higher share of people who are proficient in English. But we see that although Asian and Pacific Island languages speakers have been doing "better" in terms of poverty and education, less of them are actually proficient in English, although the difference is relatively small.
+
+For my story, I interviewed several sources to get a better understanding of why this is. I interviewed two teachers from El Paso, which is a border town, and a student from Brownsville, Texas, which is also a border town. I found that although they're both located near the border, the gap in poverty and education could manifest differently. In addition, I also interviewed Nelson Flores, an education professor from the University of Pennsylvania, and he explained why the gap in education might not be related to proficiency levels.
+
+Still, it's important to note that all of these data are either from 2017 1-year estimates (for poverty) and 2013-2017 5-year estimates (for education and proficiency) and figures may have changed since then.

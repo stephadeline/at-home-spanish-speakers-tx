@@ -1,0 +1,223 @@
+---
+title: "Exploring poverty by language spoken at home"
+output:
+  html_document:
+    df_print: paged
+---
+
+```{r}
+library(tidyverse)
+library(tidycensus)
+library(janitor)
+```
+
+```{r}
+income_poverty <- readRDS("data-out/tx_poverty_language.rds")
+
+income_poverty
+```
+
+
+#Questions
+
+My questions for this dataset:
+* What is the percentage of people above and below poverty for each language group? (visualize this.. pie chart? waffle chart?) probably only for 2017
+* Is there a larger share of people below poverty within a certain language group?
+* Is there a change overtime? (line chart)
+
+Other questions:
+* Is there a difference between income of those who speak only English vs speak other languages? (still need to find the dataset)
+
+reminder: always take into account margin of error
+always compare percentages, not number. certain language groups have more people. there are definitely more Spanish speakers than speakers of Asian languages.
+
+
+I need to clean column names to make them easier to read
+
+```{r}
+  colnames(income_poverty) = gsub("margin_of_error", "moe", colnames(income_poverty))
+  colnames(income_poverty) = gsub("speak_", "", colnames(income_poverty))
+  colnames(income_poverty) = gsub("estimate_", "", colnames(income_poverty))
+  
+  income_poverty
+  
+```
+
+Now I need to separate the data for above and below poverty level.
+
+#At or Above Poverty Level
+
+```{r}
+above <- income_poverty %>% 
+select(year, 
+    contains("total"),
+    contains("above")
+  )
+
+#exporting to use in next notebook
+above %>% 
+  saveRDS("data-out/above-1.rds")
+
+```
+
+
+
+Now I need to reshape my dataset so that the language is a separate column. Using gather()
+
+```{r}
+above <- above %>% 
+  gather(key = "languages", "estimate", 6:15) %>% 
+  arrange(year)
+
+#need to get moe at a separate column. I think I can do this by filtering moe, separating it and then joining them? a little verbose but might be the only way..
+moe_above <- above %>% 
+  filter (str_detect(languages, "moe"))
+
+moe_above <- moe_above %>% 
+  rename(moe = estimate) %>% 
+  mutate(languages = str_replace(languages, "moe_", "")) %>% 
+  select(languages, moe, year)
+
+above <- above %>% 
+  filter (!str_detect(languages, "moe"))
+
+
+#let's join them back
+above_gathered <- left_join(above, moe_above, by = c("languages", "year"))
+
+above_gathered
+
+
+```
+
+I think I need to clean the languages column 
+
+```{r}
+above_gathered <- above_gathered %>% 
+  mutate(languages = str_replace(languages, "at_or_above_poverty_level_", "")) 
+
+```
+
+Exporting this data for use in next notebook
+
+```{r}
+above_gathered %>% 
+  saveRDS("data-out/above_gathered.rds")
+```
+
+Now I want to do the same thing for below poverty
+
+```{r}
+below <- income_poverty %>% 
+select(year, 
+    contains("total"),
+    contains("below")
+  )
+
+#exporting to use in next notebook
+below %>% 
+  saveRDS("data-out/below-1.rds")
+  
+```
+
+```{r}
+below <- below %>% 
+  gather(key = "languages", "estimate", 6:15) %>% 
+  arrange(year)
+
+#need to get moe at a separate column. I think I can do this by filtering moe, separating it and then joining them? a little verbose but might be the only way..
+moe_below <- below %>% 
+  filter (str_detect(languages, "moe"))
+
+
+moe_below <- moe_below %>% 
+  rename(moe = estimate) %>% 
+  mutate(languages = str_replace(languages, "moe_", "")) %>% 
+  select(languages, moe, year)
+
+below <- below %>% 
+  filter (!str_detect(languages, "moe"))
+
+
+#let's join them back
+below_gathered <- left_join(below, moe_below, by = c("languages", "year"))
+
+below_gathered <-below_gathered %>% 
+  mutate(languages = str_replace(languages, "below_poverty_level_", "")) 
+
+
+```
+
+```{r}
+below_gathered %>% 
+  saveRDS("data-out/below_gathered.rds")
+```
+
+Now that I've separated the two so that I can use them in other notebooks, I actually need to join them back because I want to create percentage of the population below and at/above poverty level. So let's join the two nicely cleaned datasets again..
+
+```{r}
+above_below <- inner_join(above_gathered, below_gathered, by = c("total", "moe_total", "languages", "year"))
+
+above_below <- above_below %>% 
+  rename(estimate_above = estimate.x,
+         moe_above = moe.x,
+         estimate_below = estimate.y,
+         moe_below = moe.y)
+
+
+above_below
+```
+
+
+#Plotting percentage of population living below poverty level overtime
+
+First, I need to create new columns for percentages of all speakers of that language
+
+```{r}
+above_below_pct <- above_below %>% 
+  mutate(
+    pct_below = estimate_below/(estimate_below+estimate_above)*100,
+    pct_above = estimate_above/(estimate_below+estimate_above)*100
+  )
+
+above_below_pct
+```
+ 
+Plotting for below poverty.
+
+```{r}
+above_below_pct %>% 
+  ggplot(aes(x = year, y = pct_below, group = languages)) +
+  geom_line(aes(color = languages)) +
+  labs(title = "Percentage of Texans with income below poverty level", subtitle = "based on languages spoken at home", caption = "Source: ACS 1-Year estimate", x = "Year", y = "% of total Population")
+```
+
+
+It seems that the % of the population living below poverty has declined in general for almost all groups. But here you can clearly see a gap between spanish speakers vs speakers of other language groups in terms of poverty.
+
+
+There's probably no use in plotting for above poverty because it'll just be reversed.
+
+```{r}
+#exporting to use later
+above_below_pct %>% saveRDS("data-out/above_below_pct.rds") 
+```
+
+
+
+#Are my questions for this dataset answered?
+ 
+* What is the percentage of people above and below poverty for each language group? 
+-sort of answered. But I'll create waffle charts to better illustrate this in the next notebook.
+* Is there a larger share of people below poverty within a certain language group? 
+-Yes. Spanish speakers.
+* Is there a change overtime? 
+-yes. poverty has generally declined.
+
+ More questions:
+ * Are Spanish speakers "more likely to be in poverty" or are people below poverty level more likely to be Spanish speakers?
+ 
+ Who should I contact?
+  - Nelson Flores, a professor at the University of Pennsylvania's Graduate School of Education - NPR article (https://www.npr.org/sections/ed/2017/09/15/545629043/research-shows-spanish-speakers-take-longer-to-learn-english-why)
+  - Donald Hernandez
+  https://cdlc.uncg.edu/wp-content/uploads/2012/12/Hernandez-etal-2009-School-age-children-in-immigrant-families.txt

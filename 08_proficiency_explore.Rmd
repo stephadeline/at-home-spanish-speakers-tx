@@ -1,0 +1,78 @@
+---
+title: "Visualizing proficiency by languages spoken at home"
+output:
+  html_document:
+    df_print: paged
+---
+
+```{r}
+library(tidyverse)
+library(ggplot2)
+library(waffle)
+library(janitor)
+```
+
+Importing from other notebook
+
+```{r}
+language_by_proficiency <- read_rds("data-out/02_language_proficiency.rds")
+
+language_by_proficiency
+```
+
+Now I'm going to create waffle charts for each of the language group.
+
+```{r}
+language_proficiency_pct <- language_by_proficiency %>% 
+  select(language, pct_very_well, pct_less_than_very_well)
+
+language_proficiency_pct %>% 
+  arrange(desc(pct_very_well))
+```
+
+Here you can see that the percentage speaking very well for Spanish speakers is slightly higher than for Asian languages.
+
+Before creating waffle charts, I need to separate the data into the different language categories and delete the language column.
+
+```{r}
+spanish_p <- language_proficiency_pct %>% 
+  filter(language == "spanish") %>% 
+  mutate(language = NULL)
+
+indoeuropean_p <- language_proficiency_pct %>% 
+  filter(language == "indoeuropean") %>% 
+  mutate(language = NULL)
+
+asian_p <- language_proficiency_pct %>% 
+  filter(language == "asian") %>% 
+  mutate(language = NULL)
+
+other_p <- language_proficiency_pct %>% 
+  filter(language == "other") %>% 
+  mutate(language = NULL)
+```
+
+Now charting
+
+```{r}
+spanish_pw <- waffle(spanish_p, rows=3, colors = c("#3caea3", "#ff5733"), title = "Spanish") + theme(legend.position = "none")
+
+indoeuropean_pw <- waffle(indoeuropean_p, rows=3, colors = c("#3caea3", "#ff5733"), title = "Other Indo-European Languages") + theme(legend.position = "none")
+
+asian_pw <- waffle(asian_p, rows=3, colors = c("#3caea3", "#ff5733"), title = "Asian & Pacific Island Languages") + theme(legend.position = "none")
+
+other_pw <- waffle(other_p, rows=3, colors = c("#3caea3", "#ff5733"), title = "Other Languages") + theme(legend.position = "none")
+
+library(ggpubr)
+proficiency_chart <- ggarrange(spanish_pw, asian_pw, indoeuropean_pw, other_pw, nrow = 5, common.legend = TRUE, legend ="right")
+
+annotate_figure(proficiency_chart,
+               top = text_grob("Languages Spoken at Home by English Proficiency", color = "black", face = "bold", size = 20),
+               bottom = text_grob("Data source: ACS 2017 5-Year Estimates", color = "black",
+                                  hjust = 1, x = 1, face = "italic", size = 10))
+
+```
+
+Conclusion: At-home Spanish speakers have a slightly higher percentage of people speaking English very well compared to Asian & Pacific Island Languages speakers.
+
+People speaking other Indo-European languages at home have a really high percentage of people speaking English very well.

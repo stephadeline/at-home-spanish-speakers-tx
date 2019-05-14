@@ -1,0 +1,186 @@
+---
+title: "Exploring education levels by language spoken at home"
+output:
+  html_document:
+    df_print: paged
+---
+
+```{r}
+library(tidyverse)
+library(janitor)
+library(waffle)
+```
+
+
+Importing data from other notebook
+
+```{r}
+language_by_education <- readRDS("data-out/language_by_education.rds")
+```
+
+```{r}
+language_by_education
+```
+
+
+My goal in this notebook:
+separating data by language groups and creating a waffle chart of education levels for each language group.
+
+Filtering out for Spanish Only.
+
+
+```{r}
+spanish <- language_by_education %>% 
+  filter(language == "Speak Spanish") %>% 
+  select(language, education, employment, estimate, moe)
+
+spanish 
+```
+
+
+up next: separate into education level only.
+
+I'm also creating a new dataset that has percentage instead of count. will need this for creating waffle chart.
+I'm also combining the numbers for both in the labor force or not in the labor force, because I'm not comparing that.
+
+```{r}
+spanish_by_education <- spanish %>% 
+  group_by(education) %>% 
+  summarise(sum=sum(estimate))
+
+
+spanish_by_education <- spanish_by_education %>% 
+  mutate(
+    pct = sum / sum(sum) * 100
+  )
+
+spanish_pct <- spanish_by_education %>% 
+  mutate(sum = NULL) %>% 
+  spread(education, pct)
+```
+
+doing the same thing for English
+
+```{r}
+english <- language_by_education %>% 
+  filter(language == "Speak only English")
+
+english_by_education <- english %>% 
+  group_by(education) %>% 
+  summarise(sum=sum(estimate))
+
+english_by_education <- english_by_education %>% 
+  mutate(
+    pct = sum / sum(sum) * 100
+  )
+
+english_pct <- english_by_education %>% 
+  mutate(sum = NULL) %>% 
+  spread(education, pct) %>% 
+  select("Bachelor's degree or higher", "Some college or associate's degree", "High school graduate (includes equivalency)", "Less than high school graduate")
+
+english_pct
+```
+
+doing the same thing for asian languages
+
+```{r}
+asian <- language_by_education %>% 
+  filter(language == "Speak Asian and Pacific Island languages")
+
+asian_by_education <- asian %>% 
+  group_by(education) %>% 
+  summarise(sum=sum(estimate))
+
+asian_by_education <- asian_by_education %>% 
+  mutate(
+    pct = sum / sum(sum) * 100
+  )
+
+asian_pct <- asian_by_education %>% 
+  mutate(sum = NULL) %>% 
+  spread(education, pct) %>% 
+  select("Bachelor's degree or higher", "Some college or associate's degree", "High school graduate (includes equivalency)", "Less than high school graduate")
+
+asian_pct
+```
+
+doing the same thing for Indo-European languages
+
+
+```{r}
+
+indoeuropean <- language_by_education %>% 
+  filter(language == "Speak other Indo-European languages")
+
+indoeuropean_by_education <- indoeuropean %>% 
+  group_by(education) %>% 
+  summarise(sum=sum(estimate))
+
+indoeuropean_by_education <- indoeuropean_by_education %>% 
+  mutate(
+    pct = sum / sum(sum) * 100
+  )
+
+indoeuropean_pct <- indoeuropean_by_education %>% 
+  mutate(sum = NULL) %>% 
+  spread(education, pct) %>% 
+  select("Bachelor's degree or higher", "Some college or associate's degree", "High school graduate (includes equivalency)", "Less than high school graduate")
+```
+
+doing the same thing for other languages 
+
+```{r}
+other <- language_by_education %>% 
+  filter(language == "Speak other languages")
+
+other_by_education <- other %>% 
+  group_by(education) %>% 
+  summarise(sum=sum(estimate))
+
+other_by_education <- other_by_education %>% 
+  mutate(
+    pct = sum / sum(sum) * 100
+  )
+
+other_pct <- other_by_education %>% 
+  mutate(sum = NULL) %>% 
+  spread(education, pct) %>% 
+  select("Bachelor's degree or higher", "Some college or associate's degree", "High school graduate (includes equivalency)", "Less than high school graduate")
+```
+
+I will be creating separate charts and combining them with ggarrange.
+
+```{r}
+library(ggthemes)
+library(ggplot2)
+
+english_w <- waffle(english_pct, rows=3, colors = c("#ee4035", "#ffcc5c", "#7bc043", "#0392cf"), title = "English Only") + theme(legend.position = "none")
+
+spanish_w <- waffle(spanish_pct, rows=3, colors = c("#ee4035", "#ffcc5c", "#7bc043", "#0392cf"), title ="Spanish") + theme(legend.position = "none")
+
+spanish_w
+indoeuropean_w <- waffle(indoeuropean_pct, rows=3, colors = c("#ee4035", "#ffcc5c", "#7bc043", "#0392cf"), title = "Other Indo-European languages") + theme(legend.position = "none")
+asian_w <- waffle(asian_pct, rows=3, colors = c("#ee4035", "#ffcc5c", "#7bc043", "#0392cf"), title = "Asian & Pacific Island languages") + theme(legend.position = "none")
+
+library(ggpubr)
+combined_chart <- ggarrange(english_w, asian_w, indoeuropean_w, spanish_w, nrow = 4, common.legend = TRUE, legend ="right")
+
+
+combined_chart
+
+```
+
+Adding a common title and source
+
+```{r}
+annotate_figure(combined_chart,
+               top = text_grob("Educational Attainment by Language Spoken at Home", color = "black", face = "bold", size = 20),
+               bottom = text_grob("Data source: ACS 2017 5-Year Estimates", color = "black",
+                                  hjust = 1, x = 1, face = "italic", size = 10))
+```
+
+
+Conclusion:
+
+Yes. A greater percentage of spanish speakers have low educational attainment, vs other language groups. How does this relate to poverty? I would need to ask my sources.

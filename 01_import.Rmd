@@ -1,0 +1,93 @@
+---
+title: "Importing data for number of people below/above poverty for language categories"
+output:
+  html_document:
+    df_print: paged
+---
+
+```{r}
+library(tidyverse)
+library(tidycensus)
+library(janitor)
+```
+
+
+Importing poverty data for each tx county for year 2010. I got this data from data.census.gov.
+
+Link: https://data.census.gov/cedsci/table?q=poverty%20language&table=C16009&tid=ACSDT1Y2017.C16009&t=Poverty%3APoverty&hidePreview=true&g=0400000US48
+
+```{r}
+income_10 <- read_csv("data-income-poverty-counties/income_10.csv", skip = 1) %>% clean_names()
+
+income_10
+
+```
+
+Let's look at Travis County. just for fun
+
+```{r}
+income_10 %>% 
+  filter(geographic_area_name == "Travis County, Texas")
+```
+
+Okay.. looks like the margin of error for all counties is a little too big. Let's just try to do for Texas.
+
+
+```{r}
+income_tx_10 <- read_csv("data-income-poverty/tx_2010.csv", skip=1) %>% clean_names()
+
+income_tx_10 %>% head()
+```
+
+cool. let's do it for all years. trying to use a function instead of importing one by one and binding later.
+
+```{r}
+data_path <- "data-income-poverty/"   # path to the data
+files <- dir(data_path, pattern = "*.csv") # get file names
+
+files
+
+tx_poverty_language <- files %>%
+  # read in all the files, appending the path before the filename
+  map(~ read_csv(file.path(data_path, .), skip = 1)) %>% 
+  reduce(rbind)
+
+tx_poverty_language <- data_frame(filename = files) %>% # create a data frame
+                                         # holding the file names
+  mutate(file_contents = map(filename,          # read files into
+           ~ read_csv(file.path(data_path, .), skip =1)) # a new data column
+        )  
+
+tx_poverty_language <- unnest(tx_poverty_language) %>% clean_names()
+
+
+```
+
+It worked! I got it from https://serialmentor.com/blog/2016/6/13/reading-and-combining-many-tidy-data-files-in-R
+
+Cool. now let's clean the names.
+
+```{r}
+tx_poverty_language %>% names()
+```
+
+```{r}
+names(tx_poverty_language) <- gsub("total_income_in_the_past_12_months_", "", names(tx_poverty_language))
+
+tx_poverty_language <-tx_poverty_language %>% 
+  mutate(
+    filename = str_replace(filename, "tx_", ""),
+    filename = str_replace(filename, ".csv", "")
+  ) %>% 
+  rename(year = filename)
+
+tx_poverty_language
+
+```
+
+OK now let's export the data.
+
+```{r}
+saveRDS(tx_poverty_language, "data-out/tx_poverty_language.rds")
+
+```

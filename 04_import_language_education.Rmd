@@ -1,0 +1,72 @@
+---
+title: "Importing education levels"
+output:
+  html_document:
+    df_print: paged
+---
+
+```{r}
+library(tidyverse)
+library(tidycensus)
+```
+
+I want to get census data for educational attainment based on language spoken at home. I looked at Factfinder and found: EDUCATIONAL ATTAINMENT AND EMPLOYMENT STATUS BY LANGUAGE SPOKEN AT HOME FOR THE POPULATION 25 YEARS AND OVER (code: B16010)
+
+
+```{r}
+v17 <- load_variables(2017, "acs5", cache = TRUE)
+
+view(v17)
+```
+
+
+
+
+```{r}
+language_by_education <- get_acs(geography = "state", variables = c("B16010_001", "B16010_002", "B16010_003", "B16010_004", "B16010_005", "B16010_006", "B16010_007", "B16010_008", "B16010_009", "B16010_010", "B16010_011", "B16010_012", "B16010_013", "B16010_014", "B16010_015", "B16010_016", "B16010_017", "B16010_018", "B16010_019", "B16010_020", "B16010_021", "B16010_022", "B16010_023", "B16010_024", "B16010_025", "B16010_026", "B16010_027", "B16010_028", "B16010_029", "B16010_030", "B16010_031", "B16010_032", "B16010_033", "B16010_034", "B16010_035", "B16010_036", "B16010_037", "B16010_038", "B16010_039", "B16010_040", "B16010_041", "B16010_042", "B16010_043", "B16010_044", "B16010_045", "B16010_046", "B16010_047", "B16010_048", "B16010_049", "B16010_050", "B16010_051", "B16010_052", "B16010_053"), year = 2017, state = "TX")
+
+```
+
+
+```{r}
+language_by_education <- language_by_education %>% 
+rename(
+  name = variable,
+  state = NAME
+)
+
+language_by_education <- inner_join(language_by_education, v17, by="name") 
+
+language_by_education <- language_by_education %>% 
+  mutate(concept = NULL)
+
+language_by_education <- language_by_education %>% 
+  mutate(
+    label = str_replace(label, "Estimate!!Total!!", "")
+  )
+
+language_by_education <- language_by_education %>% 
+  filter(str_detect(label, "Speak")) #filtering out the totals only
+
+language_by_education
+
+```
+
+I need to separate the Label column
+
+```{r}
+language_by_education <- language_by_education %>% 
+    separate(label, c("education", "employment", "language"), "!!")
+
+language_by_education
+
+```
+
+
+great! exporting the data to use in another notebook. I want to visualize this with using waffle charts.
+
+```{r}
+language_by_education %>% saveRDS("data-out/language_by_education.rds")
+```
+
+

@@ -1,0 +1,224 @@
+---
+title: "Waffle charts of language speakers in Texas & their poverty levels"
+output:
+  html_document:
+    df_print: paged
+---
+
+```{r}
+library(tidyverse)
+library(janitor)
+library(waffle)
+```
+
+I want to create a waffle chart for language speakers in Texas, and looking at the share of people below & at or above poverty level.
+
+Reading data
+
+```{r}
+above <- readRDS("data-out/above-1.rds")
+below <- readRDS("data-out/below-1.rds")
+
+#renaming column names
+names(above) <- names(above) %>% 
+  str_replace_all("at_or_above_poverty_level_", "")
+
+names(below) <- names(below) %>% 
+  str_replace_all("below_poverty_level_", "")
+
+below
+```
+
+Let's select for only the estimates and filter for only 2017
+
+```{r}
+above_2017 <- above %>% 
+  filter(year == 2017) %>% 
+  select(only_english, spanish, other_indo_european_languages, asian_and_pacific_island_languages, other_languages)
+
+above_2017
+```
+
+
+```{r}
+below_2017 <- below %>% 
+  filter(year == 2017) %>% 
+  select(only_english, spanish, other_indo_european_languages, asian_and_pacific_island_languages, other_languages)
+
+total_2017 <- bind_rows(
+  "below" = below_2017, 
+  "above" = above_2017,
+  .id = "poverty_status")
+
+total_2017
+```
+
+Let's calculate sum of total language speakers (both below and above poverty)
+```{r}
+waffle_total_17 <- total_2017 %>% 
+  select_if(is.numeric) %>%
+   map_dbl(sum)
+```
+
+Now let's create a waffle chart!
+
+```{r}
+waffle(waffle_total_17/100000, rows=11, title = "Texas population by language spoken at home in 2017", xlab = "1 square is 100,000 people | source = ACS 1-Year estimates")
+```
+
+Spanish speaking population are a big part of the whole Texas population. Population speaking a language other than English at home makes up a third of the population.
+
+Map spanish speakers
+
+#Creating Waffle Chart for population above/below poverty, for all language groups.
+
+
+first importing data from other notebook
+
+```{r}
+above_below <- readRDS("data-out/above_below_pct.rds")
+
+above_below
+```
+
+
+```{r}
+above_below_waffle <- above_below %>% 
+  select (year, languages, pct_below, pct_above)
+
+above_below_waffle_10 <- above_below_waffle %>% 
+  filter(year == 2010) #filter for 2010, because I only want to create waffle charts for 2017
+
+above_below_waffle_10
+```
+
+Now let's create waffle charts
+
+```{r}
+above_below_waffle_gathered_10 <- above_below_waffle_10 %>% 
+  gather(key = "poverty_status", value="percentage", 3:4)
+
+above_below_waffle_gathered_10
+```
+
+```{r}
+english_10 <- above_below_waffle_10 %>% 
+  mutate(year = NULL) %>% 
+  filter(languages == "only_english") %>% 
+  select(pct_above, pct_below)
+
+spanish_10 <- above_below_waffle_10 %>% 
+  mutate(year = NULL) %>% 
+  filter(languages == "spanish") %>% 
+  select(pct_above, pct_below)
+
+
+european_10 <- above_below_waffle_10 %>% 
+  mutate(year = NULL) %>% 
+  filter(languages == "other_indo_european_languages") %>% 
+  select(pct_above, pct_below)
+
+
+asian_10 <- above_below_waffle_10 %>% 
+  mutate(year = NULL) %>% 
+  filter(languages == "asian_and_pacific_island_languages") %>% 
+  select(pct_above, pct_below)
+
+
+other_10 <- above_below_waffle_10 %>% 
+  mutate(year = NULL) %>% 
+  filter(languages == "other_languages") %>% 
+  select(pct_above, pct_below)
+
+
+```
+
+creating multiple charts, combining with ggarange
+
+```{r}
+english_10
+
+english <- waffle(english_10, rows=3, title = "English", colors = c("light blue", "maroon", "white"))
+
+english
+
+spanish <- waffle(spanish_10, rows=3, title = "Spanish", colors = c("light blue", "maroon", "white"))
+
+asian <- waffle(asian_10, rows=3, title = "Asian and Pacific Island",  colors = c("light blue", "maroon", "white"))
+
+european <- waffle(european_10, rows=3, title = "Indo-European", colors = c("light blue", "maroon", "white"))
+
+other <- waffle(other_10, rows=3, title = "Other", colors = c("light blue", "maroon", "white"))
+
+library(ggpubr)
+waffle_2010 <- ggarrange(english, spanish, asian, european, nrow = 4, common.legend = TRUE, legend ="right")
+
+waffle_2010 %>% annotate_figure(top = text_grob("Poverty Levels by Language Spoken at Home in 2010", color = "black", face = "bold", size = 20),
+               bottom = text_grob("Data source: ACS 2010 1-Year Estimates", color = "black",
+                                  hjust = 1, x = 1, face = "italic", size = 10)) 
+  
+
+```
+
+Now I can see the difference in percentage of population living above and below poverty. Spanish speakers have a higher share of people living in poverty.
+
+Now let's do it for 2017.
+
+```{r}
+above_below_waffle_17 <- above_below_waffle %>% 
+  filter(year == 2017) #filter for 2010, because I only want to create waffle charts for 2017
+above_below_waffle_gathered_17 <- above_below_waffle_10 %>% 
+  gather(key = "poverty_status", value="percentage", 3:4)
+
+english_17 <- above_below_waffle_17 %>% 
+  mutate(year = NULL) %>% 
+  filter(languages == "only_english") %>% 
+  select(pct_above, pct_below)
+
+spanish_17 <- above_below_waffle_17 %>% 
+  mutate(year = NULL) %>% 
+  filter(languages == "spanish") %>% 
+  select(pct_above, pct_below)
+
+
+european_17 <- above_below_waffle_17 %>% 
+  mutate(year = NULL) %>% 
+  filter(languages == "other_indo_european_languages") %>% 
+  select(pct_above, pct_below)
+
+
+asian_17 <- above_below_waffle_17 %>% 
+  mutate(year = NULL) %>% 
+  filter(languages == "asian_and_pacific_island_languages") %>% 
+  select(pct_above, pct_below)
+
+
+other_17 <- above_below_waffle_17 %>% 
+  mutate(year = NULL) %>% 
+  filter(languages == "other_languages") %>% 
+  select(pct_above, pct_below)
+
+```
+
+Creating multiple charts for 2017
+
+```{r}
+english_2017 <- waffle(english_17, rows=3, title = "English", colors = c("light blue", "maroon", "white"))
+
+spanish_2017 <- waffle(spanish_17, rows=3, title = "Spanish", colors = c("light blue", "maroon", "white"))
+
+asian_2017 <- waffle(asian_17, rows=3, title = "Asian and Pacific Island languages",  colors = c("light blue", "maroon", "white"))
+
+european_2017 <- waffle(european_17, rows=3, title = "Other Indo-European languages", colors = c("light blue", "maroon", "white"))
+
+other_2017 <- waffle(other_17, rows=3, title = "Other", colors = c("light blue", "maroon", "white"))
+
+library(ggpubr)
+waffle_2017 <- ggarrange(english_2017, spanish_2017, asian_2017, european_2017, nrow = 4, common.legend = TRUE, legend ="right")
+
+waffle_2017 %>% annotate_figure(top = text_grob("Poverty Levels by Language Spoken at Home in Texas", color = "black", face = "bold", size = 20),
+               bottom = text_grob("Data source: ACS 2017 1-Year Estimates", color = "black",
+                                  hjust = 1, x = 1, face = "italic", size = 10)) 
+```
+
+The gap is closer for 2017, compared with 2010.

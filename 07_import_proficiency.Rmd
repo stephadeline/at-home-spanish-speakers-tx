@@ -1,0 +1,168 @@
+---
+title: "Importing Proficiency Data"
+output:
+  html_document:
+    df_print: paged
+---
+
+```{r}
+library(tidyverse)
+library(janitor)
+```
+
+
+#Import
+
+The last factor I want to compare between the four language speakers is proficiency. I downloaded this csv file from data.census.gov. This is the link to the data: https://data.census.gov/cedsci/table?q=languages%20spoken%20at%20home&table=S1601&tid=ACSST5Y2017.S1601&t=Language%20Spoken%20at%20Home&hidePreview=true&g=0400000US48
+
+
+```{r}
+proficiency_raw <- read.csv("data-raw/ACSST5Y2017.S1601_data_with_overlays_2019-05-08T214735.csv")
+
+proficiency_raw 
+```
+
+
+This is a very messy dataset but I've noted from the key which columns I want. This dataset breaks the data down to age groups, which I don't need.
+
+```{r}
+proficiency_select <- proficiency_raw %>% 
+  select("S1601_C03_004E", "S1601_C03_004M", "S1601_C03_008E", "S1601_C03_008M", "S1601_C03_012E", "S1601_C03_012M", "S1601_C03_016E", "S1601_C03_016M", "S1601_C05_004E", "S1601_C05_004M", "S1601_C05_008E", "S1601_C05_008M", "S1601_C05_012E", "S1601_C05_012M", "S1601_C05_016E", "S1601_C05_016M")
+
+proficiency <- proficiency_select[-c(1),] #deleting the very ugly name row
+
+proficiency
+
+```
+
+Now I have to rename these
+
+for key: c03 means very well, c05 means less than very well
+004 is Spanish
+008 is other Indoeuropean languages
+012 is Asian & Pacific Island languages
+016 is other languages
+E is estimate
+M is margin of error
+
+```{r}
+
+proficiency <- proficiency %>% 
+  rename(spanish_vwell = S1601_C03_004E,
+         moe_spanish_vwell = S1601_C03_004M,
+         indoeuropean_vwell = S1601_C03_008E,
+         moe_indoeuropean_vwell = S1601_C03_008M,
+         asian_vwell = S1601_C03_012E,
+         moe_asian_vwell = S1601_C03_012M,
+         other_vwell = S1601_C03_016E,
+         moe_other_vwell = S1601_C03_016M,
+         spanish_ltvwell = S1601_C05_004E,
+         moe_spanish_ltvwell = S1601_C05_004M,
+         indoeuropean_ltvwell = S1601_C05_008E,
+         moe_indoeuropean_ltvwell = S1601_C05_008M,
+         asian_ltvwell = S1601_C05_012E,
+         moe_asian_ltvwell = S1601_C05_012M,
+         other_ltvwell = S1601_C05_016E,
+         moe_other_ltvwell = S1601_C05_016M)
+```
+
+
+Now I'll gather them 
+```{r}
+proficiency <- proficiency %>% 
+  gather(key = "language", value = "estimate", 1:16)
+```
+
+Now I need to move the margin of error into a separate column. Totally long way of doing it...
+
+```{r}
+moe_table <- proficiency %>% 
+  filter(str_detect(language, "moe"))
+
+moe_table <- moe_table %>% 
+  mutate(language = str_replace (language, "moe_", "")) %>% 
+  rename(moe = estimate)
+
+moe_table
+```
+
+Now doing the same thing for language table
+
+```{r}
+language_table <- proficiency %>% 
+  filter(!str_detect(language, "moe"))
+
+language_table 
+```
+
+Now joining
+
+```{r}
+language_proficiency <- inner_join(language_table, moe_table, by = "language")
+
+language_proficiency
+```
+
+Let's make sure none of the MOE is more than 10% of the estimate
+
+```{r}
+language_proficiency <- language_proficiency %>% 
+  mutate(moe = as.numeric(moe),
+         estimate = as.numeric(estimate))#changing to numbers
+
+language_proficiency %>% 
+  mutate(pct_moe = moe/estimate * 100)
+```
+
+Looks like the moe is relatively small.
+
+Good, now I need to separate estimate of very well and less than very well
+
+```{r}
+lep <- language_proficiency %>% 
+  filter(str_detect(language, "ltvwell"))
+
+lep <- lep %>% 
+  mutate(language = str_replace(language, "_ltvwell", "")) %>% 
+  rename(less_than_very_well = estimate,
+         moe_less_than_very_well = moe)
+
+lep
+
+prof <- language_proficiency %>% 
+  filter(!str_detect(language, "ltvwell"))
+
+prof <- prof %>% 
+  mutate(language = str_replace(language, "_vwell", "")) %>% 
+  rename(very_well = estimate,
+         moe_very_well = moe)
+
+prof
+```
+
+
+Now I'll join the two.
+
+```{r}
+language_by_proficiency <- inner_join(lep, prof, by = "language")
+
+language_by_proficiency
+```
+
+Now let's create new columns for percentages
+
+```{r}
+language_by_proficiency <- language_by_proficiency %>% 
+  mutate(pct_very_well = very_well / (very_well + less_than_very_well) * 100,
+         pct_less_than_very_well = less_than_very_well / (very_well + less_than_very_well) * 100)
+
+language_by_proficiency
+```
+
+Exporting the clean data for use in another notebook
+
+```{r}
+language_by_proficiency %>% saveRDS("data-out/02_language_proficiency.rds")
+
+```
+
