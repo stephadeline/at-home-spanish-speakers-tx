@@ -3,7 +3,9 @@ title: "A Look at the at-home Spanish-speaking Population in Texas"
 output:
   html_document:
     df_print: paged
-    knit: (function(inputFile, encoding) { rmarkdown::render(inputFile, encoding = encoding, output_dir = "docs") })
+knit: (function(inputFile, encoding) { rmarkdown::render(inputFile, encoding = encoding, output_dir = "docs") })
+---
+
 
 ---
 
